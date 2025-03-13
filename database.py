@@ -1,15 +1,15 @@
-from sqlalchemy import create_engine, Column, Integer, String, Boolean
+from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
-# SQLite database file
+# SQLite Database URL
 DATABASE_URL = "sqlite:///./todos.db"
 
-# Create database engine
+# Create Engine
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 
-# Create a session factory
+# Create SessionLocal for DB operations
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# Define base model class
+# Base class for ORM models
 Base = declarative_base()

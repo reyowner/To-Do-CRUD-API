@@ -1,10 +1,11 @@
-from database import Base  # ✅ Use absolute import
-from sqlalchemy import Column, Integer, String, Boolean
+from sqlalchemy import Column, Integer, String
+from database import Base
 
-class Todo(Base):
+class ToDoDB(Base):
+    """
+    Database model for To-Do items.
+    """
     __tablename__ = "todos"
 
     id = Column(Integer, primary_key=True, index=True)
-    title = Column(String, index=True)
-    description = Column(String)
-    completed = Column(Boolean, default=False)
+    task = Column(String, index=True)

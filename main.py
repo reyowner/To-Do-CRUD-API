@@ -1,101 +1,169 @@
-from fastapi import FastAPI, HTTPException, Request, Form
+from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import create_engine, Column, Integer, String
-from sqlalchemy.orm import sessionmaker, declarative_base
-from pydantic import BaseModel
+from sqlalchemy.orm import Session
+from database import SessionLocal, engine
+from models import Base, ToDoDB
+from schemas import ToDoCreate, ToDoResponse
 from typing import List
-import os
 
-# FastAPI app setup
+# Initialize FastAPI app
 app = FastAPI()
 
 # Setup templates & static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
-# Database setup (SQLite)
-DATABASE_URL = "sqlite:///./todos.db"
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
-SessionLocal = sessionmaker(bind=engine)
-Base = declarative_base()
-
-# To-Do model for database
-class ToDoDB(Base):
-    __tablename__ = "todos"
-    id = Column(Integer, primary_key=True, index=True)
-    task = Column(String, nullable=False)
-
-# Create the database
+# Create database tables if they don't exist
 Base.metadata.create_all(bind=engine)
 
-# Pydantic model for validation
-class ToDoCreate(BaseModel):
-    task: str
+def get_db():
+    """
+    Dependency function to provide a database session.
+    Ensures proper cleanup after each request.
+    """
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
-class ToDoResponse(ToDoCreate):
-    id: int
+@app.get("/", response_model=None)
+def home(request: Request, db: Session = Depends(get_db)):
+    """
+    Serve the homepage with a list of all to-dos.
 
-# Serve the main page
-@app.get("/")
-def home(request: Request):
-    session = SessionLocal()
-    todos = session.query(ToDoDB).all()
-    session.close()
-    return templates.TemplateResponse("index.html", {"request": request, "todos": todos})
+    Parameters:
+    - request (Request): The FastAPI request object.
+    - db (Session): The database session.
 
-# Create a to-do
-@app.post("/todos", response_model=ToDoResponse)
-def create_todo(todo: ToDoCreate):
-    session = SessionLocal()
+    Returns:
+    - HTML template response displaying the list of to-dos.
+    """
+    try:
+        todos = db.query(ToDoDB).all()
+        return templates.TemplateResponse("index.html", {"request": request, "todos": todos})
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to fetch To-Dos")
+
+@app.post("/todos", response_model=ToDoResponse, status_code=201)
+def create_todo(todo: ToDoCreate, db: Session = Depends(get_db)):
+    """
+    Create a new to-do item.
+
+    Parameters:
+    - todo (ToDoCreate): Pydantic model containing task data.
+    - db (Session): Database session.
+
+    Returns:
+    - ToDoResponse: The created to-do item with an assigned ID.
+
+    Raises:
+    - HTTP 500 if the to-do creation fails.
+    """
     new_todo = ToDoDB(task=todo.task)
-    session.add(new_todo)
-    session.commit()
-    session.refresh(new_todo)
-    session.close()
-    return new_todo
+    db.add(new_todo)
+    try:
+        db.commit()
+        db.refresh(new_todo)
+        return new_todo
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to create To-Do")
 
-# Get all to-dos
 @app.get("/todos", response_model=List[ToDoResponse])
-def get_todos():
-    session = SessionLocal()
-    todos = session.query(ToDoDB).all()
-    session.close()
-    return todos
+def get_todos(db: Session = Depends(get_db)):
+    """
+    Retrieve all to-dos from the database.
 
-# Retrieve a single to-do
+    Parameters:
+    - db (Session): The database session.
+
+    Returns:
+    - List[ToDoResponse]: A list of all stored to-dos.
+
+    Raises:
+    - HTTP 500 if retrieval fails.
+    """
+    try:
+        return db.query(ToDoDB).all()
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to fetch To-Dos")
+
 @app.get("/todos/{todo_id}", response_model=ToDoResponse)
-def get_todo(todo_id: int):
-    session = SessionLocal()
-    todo = session.query(ToDoDB).filter(ToDoDB.id == todo_id).first()
-    session.close()
+def get_todo(todo_id: int, db: Session = Depends(get_db)):
+    """
+    Retrieve a single to-do item by its ID.
+
+    Parameters:
+    - todo_id (int): ID of the to-do item.
+    - db (Session): The database session.
+
+    Returns:
+    - ToDoResponse: The requested to-do item if found.
+
+    Raises:
+    - HTTP 404 if the to-do is not found.
+    """
+    todo = db.query(ToDoDB).filter(ToDoDB.id == todo_id).first()
     if not todo:
         raise HTTPException(status_code=404, detail="To-Do not found")
     return todo
 
-# Update a to-do
 @app.put("/todos/{todo_id}", response_model=ToDoResponse)
-def update_todo(todo_id: int, todo: ToDoCreate):
-    session = SessionLocal()
-    existing_todo = session.query(ToDoDB).filter(ToDoDB.id == todo_id).first()
-    if not existing_todo:
-        session.close()
-        raise HTTPException(status_code=404, detail="To-Do not found")
-    existing_todo.task = todo.task
-    session.commit()
-    session.refresh(existing_todo)
-    session.close()
-    return existing_todo
+def update_todo(todo_id: int, todo: ToDoCreate, db: Session = Depends(get_db)):
+    """
+    Update an existing to-do item.
 
-# Delete a to-do
-@app.delete("/todos/{todo_id}")
-def delete_todo(todo_id: int):
-    session = SessionLocal()
-    todo = session.query(ToDoDB).filter(ToDoDB.id == todo_id).first()
-    if not todo:
-        session.close()
+    Parameters:
+    - todo_id (int): ID of the to-do item to update.
+    - todo (ToDoCreate): Pydantic model with updated task data.
+    - db (Session): The database session.
+
+    Returns:
+    - ToDoResponse: The updated to-do item.
+
+    Raises:
+    - HTTP 404 if the to-do is not found.
+    - HTTP 500 if the update fails.
+    """
+    existing_todo = db.query(ToDoDB).filter(ToDoDB.id == todo_id).first()
+    if not existing_todo:
         raise HTTPException(status_code=404, detail="To-Do not found")
-    session.delete(todo)
-    session.commit()
-    session.close()
-    return {"message": "To-Do deleted successfully"}
+    
+    existing_todo.task = todo.task
+    try:
+        db.commit()
+        db.refresh(existing_todo)
+        return existing_todo
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to update To-Do")
+
+@app.delete("/todos/{todo_id}")
+def delete_todo(todo_id: int, db: Session = Depends(get_db)):
+    """
+    Delete a to-do item.
+
+    Parameters:
+    - todo_id (int): ID of the to-do item to delete.
+    - db (Session): The database session.
+
+    Returns:
+    - dict: Success message.
+
+    Raises:
+    - HTTP 404 if the to-do is not found.
+    - HTTP 500 if the deletion fails.
+    """
+    todo = db.query(ToDoDB).filter(ToDoDB.id == todo_id).first()
+    if not todo:
+        raise HTTPException(status_code=404, detail="To-Do not found")
+    
+    try:
+        db.delete(todo)
+        db.commit()
+        return {"message": "To-Do deleted successfully"}
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to delete To-Do")
