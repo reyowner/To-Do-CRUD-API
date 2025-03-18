@@ -26,33 +26,52 @@ This project is a **CRUD-based To-Do List API** built with **FastAPI**, featurin
 - JavaScript **fetch API** interacts with the FastAPI backend dynamically.  
 - UI updates **instantly** when tasks are added, edited, or deleted.  
 
+---
 
-## 🚀 Getting Started
+## 🚀 Getting Started (Dockerized Setup)
 
-# 1️⃣ Clone the Repository
+### 1️⃣ Clone the Repository
 ```bash
-git clone https://github.com/your-username/todo-fastapi.git
-cd todo-fastapi
+git clone https://github.com/your-username/To-Do-List_Python.git
+cd To-Do-List_Python
 ```
 
-# 2️⃣ Set Up a Virtual Environment
+### 2️⃣ Install Dependencies
+Ensure Docker is installed on your machine. If not, download and install it from [Docker's official website](https://www.docker.com/products/docker-desktop/)
+
+### 3️⃣ Build and Run the Containers
+Use docker-compose to build and start the backend container.
 ```bash
-python -m venv venv
-source venv/bin/activate  # On Windows, use: venv\Scripts\activate
+docker-compose up -d --build
+```
+This command will:
+✅ Build the FastAPI backend container  
+✅ Start the container in detached mode (-d)
+
+### 4️⃣ Verify Running Containers
+To check if the container is running correctly, use:
+```bash
+docker ps
+```
+You should see the running container:
+```bash
+CONTAINER ID   IMAGE                        COMMAND                  PORTS                    NAMES
+xxxxx          to-do-list_python-backend    "uvicorn main:app --…"   0.0.0.0:8000->8000/tcp   to-do-list_python-backend-1
 ```
 
-# 3️⃣ Install Dependencies
+### 5️⃣ Access the Application
+Once the container is running, open the application in your browser:
+🔗 API Endpoint: [http://localhost:8000/docs](http://localhost:8000/docs) (Interactive API documentation)  
+🔗 To-Do List API: [http://localhost:8000/todos](http://localhost:8000/todos) (Check stored to-dos)
+
+### 🛑 Stopping the Application
+To stop the running container, use:
 ```bash
-pip install fastapi uvicorn pydantic sqlite3 jinja2
+docker-compose down
 ```
+This will gracefully shut down the service.
 
-# 4️⃣ Run the FastAPI Server
-```bash
-uvicorn main:app --reload
-```
-
-# Now, open [http://127.0.0.1:8000](http://127.0.0.1:8000) in your browser.
-
+---
 
 ## 🔹 **Tech Stack**  
 | Technology  | Usage |
